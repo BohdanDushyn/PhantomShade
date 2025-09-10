@@ -3,6 +3,7 @@
 
 #include "LIghtActor.h"
 
+
 // Sets default values
 ALIghtActor::ALIghtActor()
 {
@@ -15,7 +16,6 @@ ALIghtActor::ALIghtActor()
 void ALIghtActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
 // Called every frame
@@ -25,6 +25,17 @@ void ALIghtActor::Tick(float DeltaTime)
 
 }
 
+FVector ALIghtActor::GetLightSourPosition()
+{
+	return GetComponentByClass<USphereComponent>()->GetComponentLocation();
+}
+
+float ALIghtActor::GetLightSourAttenuationRadius()
+{
+	return GetComponentByClass<USphereComponent>()->GetScaledSphereRadius();
+}
+
+/*
 FVector ALIghtActor::GetLightSourPosition_Implementation()
 {
 	return GetComponentByClass<UPointLightComponent>()->GetComponentLocation();
@@ -35,3 +46,4 @@ float ALIghtActor::GetLightSourAttenuationRadius_Implementation()
 	return GetComponentByClass<UPointLightComponent>()->AttenuationRadius;
 }
 
+*/

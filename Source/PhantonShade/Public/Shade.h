@@ -17,11 +17,13 @@ public:
 	AShade();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-		UProceduralMeshComponent* MeshComponent;
+	UProceduralMeshComponent* MeshComponent;
 
 	// Додаємо Root компонент для правильної ієрархії
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* DefaultSceneRoot;
+
+	bool bCollisionEnabled = true;
 
 protected:
 	// Called when the game starts or when spawned
@@ -29,10 +31,13 @@ protected:
 
 public:	
 	TArray<AActor*> OverlappingActors;
+	float moveDelta = 0.5f;
 
 	void UpdateShadowActorMeshes(int32 SectionID, const TArray<FVector>& VerticesArray, const TArray<int32>& TriangelsArray);
-	void RemoveMeschSection();
+	void RemoveMeschSections();
 
+	UFUNCTION(BlueprintCallable, Category = "ShadowUpdate")
+	void SetMoveDelta(float NewMoveDelta) { moveDelta = NewMoveDelta; }
 
 	UFUNCTION(BlueprintCallable, Category = "Overlaping")
 	TArray<AActor*> GetAllOverlapingActors();

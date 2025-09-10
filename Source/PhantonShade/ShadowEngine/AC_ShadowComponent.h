@@ -49,11 +49,9 @@ class PHANTONSHADE_API UAC_ShadowComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:	
-	// Sets default values for this component's properties
 	UAC_ShadowComponent();
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lighting")
-    TArray<TSoftObjectPtr<AActor>> LightActors;
+	TArray<ALIghtActor*> CastedLightActors;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Actor Settings", meta = (AllowedClasses = "Actor"))
     TSubclassOf<AActor> ShadowActorClass;
@@ -61,18 +59,19 @@ public:
 protected:
     UWorld* WorldPtr = GetWorld();
 
+    std::atomic<int32> ActiveTaskCount{ 0 };
+
     UClass* LightActorBlueprintClass;
 
 	virtual void BeginPlay() override;
 
 	FVector OwnerLocation;
 
+	bool bInShadow = false;
 
     float timer1Value = 0;
 
     int32 timer1Counter = 0;
-
-
 
 	FVector OwnerForwardVector;
 
@@ -85,12 +84,17 @@ protected:
 
     FVector MeshLocationVector;
 
+	float offsetCobvexityCoefficient = 1.0f;
+
     FRotator MeshRotator;
 
 	float TimerInterval = 1.0f;
 
     AActor* ParentActor;
 
+    float lightLevel = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "ShadeActor")
     AShade* CastedShadeActor;
 
     float OffsetFromPlane = 0;
@@ -104,8 +108,15 @@ protected:
 public:	 
 	void SpawnShadowActor();
 
+	//!!!!розробити зміщення для квадратних об'єктів
+
+    bool AreAllTasksComplete() const
+    {
+        return ActiveTaskCount.load() == 0;
+    }
+
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
-    TArray<AActor*> GetShadowOverlapingActors(){ return CastedShadeActor->GetAllOverlapingActors();}
+    TArray<AActor*> GetShadowOverlapingActors() { return CastedShadeActor->GetAllOverlapingActors(); }
 
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
     void SetParentActor();
@@ -130,18 +141,12 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     void RemoveLightActor(AActor* Actor);
-
-    UFUNCTION(BlueprintCallable, Category = "Lighting")
-    TArray<AActor*> GetLoadedLightActors();
-
-    UFUNCTION(BlueprintCallable, Category = "Lighting")
-    bool ContainsLightActor(AActor* Actor);
 		
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     int32 GetLightSoursAmount();
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
-    void StartShadowCalculateWithParams(float TimerDelay, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces);
+    void StartShadowCalculateWithParams(float TimerDelay, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces, float MinShadowMoveDelta);
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     void StartShadowCalculate();
@@ -173,7 +178,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     void CreateShadow();
 
-    void CreateOneShadow(TSoftObjectPtr<AActor> LightActor, int32 id);
+    void CreateOneShadow(ALIghtActor* LightActor, int32 id);
 
     //void SetLightActorsFromOverlapping();
 };
