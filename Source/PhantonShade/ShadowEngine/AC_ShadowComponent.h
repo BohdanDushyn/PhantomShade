@@ -108,6 +108,8 @@ protected:
 public:	 
 	void SpawnShadowActor();
 
+    //!!!Спробувати систему з актором що розраховує відстань від джерел світла до актора на основі відстані
+    //!!!Параметори через Game Stat
 	//!!!!розробити зміщення для квадратних об'єктів
 
     bool AreAllTasksComplete() const
@@ -120,6 +122,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
     void SetParentActor();
+
+	void SetShadowCollision(bool bEnableCollision);
 
     UFUNCTION(BlueprintCallable, Category = "LightingTimer")
     void SetTimerInterval(float NewTimerInterval);

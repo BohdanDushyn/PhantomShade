@@ -54,10 +54,11 @@ void AShade::UpdateShadowActorMeshes(int32 SectionID, const TArray<FVector>& Ver
 	}
 }
 
+/*
 void AShade::RemoveMeschSections()
 {
 	MeshComponent->ClearAllMeshSections();
-}
+}*/
 
 TArray<AActor*> AShade::GetAllOverlapingActors()
 {

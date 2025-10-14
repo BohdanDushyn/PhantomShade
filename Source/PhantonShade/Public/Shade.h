@@ -34,7 +34,7 @@ public:
 	float moveDelta = 0.5f;
 
 	void UpdateShadowActorMeshes(int32 SectionID, const TArray<FVector>& VerticesArray, const TArray<int32>& TriangelsArray);
-	void RemoveMeschSections();
+	//void RemoveMeschSections();
 
 	UFUNCTION(BlueprintCallable, Category = "ShadowUpdate")
 	void SetMoveDelta(float NewMoveDelta) { moveDelta = NewMoveDelta; }

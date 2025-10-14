@@ -118,6 +118,11 @@ void UAC_ShadowComponent::SetParentActor()
 	ParentActor = GetOwner();
 }
 
+void UAC_ShadowComponent::SetShadowCollision(bool bEnableCollision)
+{
+	CastedShadeActor->bCollisionEnabled = bEnableCollision;	
+}
+
 void UAC_ShadowComponent::SetTimerInterval(float NewTimerInterval)
 {
 	TimerInterval = NewTimerInterval;
@@ -186,7 +191,7 @@ void UAC_ShadowComponent::RemoveLightActor(AActor* Actor)
 		CastedLightActors.Remove(Cast<ALIghtActor>(Actor));
 	}
 
-	CastedShadeActor->RemoveMeschSections();
+	CastedShadeActor->MeshComponent->ClearAllMeshSections();
 }
 
 int32 UAC_ShadowComponent::GetLightSoursAmount()
@@ -323,7 +328,7 @@ TArray<FVector> UAC_ShadowComponent::MakeShadowFloor(FVector OffsetValue, FVecto
 
 void UAC_ShadowComponent::CreateShadow()
 {
-	uint64 StartCycles = FPlatformTime::Cycles64();
+	//uint64 StartCycles = FPlatformTime::Cycles64();
 
 	if (!AreAllTasksComplete())
 	{
@@ -342,10 +347,9 @@ void UAC_ShadowComponent::CreateShadow()
 		return;
 	}
 
-
-	if (bInShadow)
+	if (bInShadow || CastedLightActors.Num() < CastedShadeActor->MeshComponent->GetNumSections())
 	{
-		CastedShadeActor->RemoveMeschSections();
+		CastedShadeActor->MeshComponent->ClearAllMeshSections();
 	}
 	bInShadow = true;
 	lightLevel = 0;
@@ -361,13 +365,16 @@ void UAC_ShadowComponent::CreateShadow()
 	TArray<ALIghtActor*> CastedLightActorsCopy = CastedLightActors;
 
 	ActiveTaskCount.store(CastedLightActorsCopy.Num());
-
+	CastedShadeActor->bCollisionEnabled = false;
 	FFunctionGraphTask::CreateAndDispatchWhenReady(
 		[WeakThis, CastedLightActorsCopy]() {
-			FGraphEventArray Tasks;
-			Tasks.Reserve(CastedLightActorsCopy.Num());
+			//FGraphEventArray Tasks;
+			//Tasks.Reserve(CastedLightActorsCopy.Num());
 			for (int32 i = 0; i < CastedLightActorsCopy.Num(); i++)
 			{
+				
+				if (i == CastedLightActorsCopy.Num() - 1) WeakThis->SetShadowCollision(true);
+
 				ALIghtActor* LightActor = CastedLightActorsCopy[i];
 
 				FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
@@ -390,7 +397,9 @@ void UAC_ShadowComponent::CreateShadow()
 					nullptr,
 					ENamedThreads::AnyHiPriThreadHiPriTask
 				);
-				Tasks.Add(Task);
+
+				if (i == CastedLightActorsCopy.Num() - 2) Task->Wait();
+				//Tasks.Add(Task);
 			}
 			//FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
 		},
@@ -398,18 +407,21 @@ void UAC_ShadowComponent::CreateShadow()
 		nullptr,
 		ENamedThreads::AnyHiPriThreadHiPriTask
 	)->Wait();
-	uint64 EndCycles = FPlatformTime::Cycles64();
-	timer1Value += FPlatformTime::ToSeconds64(EndCycles - StartCycles);
+	//uint64 EndCycles = FPlatformTime::Cycles64();
+	//timer1Value += FPlatformTime::ToSeconds64(EndCycles - StartCycles);
 
-	timer1Counter += 1;
+	//timer1Counter += 1;
 	
+	//UE_LOG(LogTemp, Warning, TEXT("Section %d"), CastedShadeActor->MeshComponent->GetNumSections());
+	//UE_LOG(LogTemp, Warning, TEXT("Sadow %d"), CastedLightActors.Num());
+	/*
 	if (timer1Counter >= 100)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("High precision time: %f ms"), timer1Value * 1000.0 / timer1Counter);
 		UE_LOG(LogTemp, Warning, TEXT("Shadow casters: %d"), CastedLightActors.Num());
 		timer1Value = 0;
 		timer1Counter = 0;
-	}
+	}*/
 }
 
 void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
@@ -458,6 +470,10 @@ void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 	}
 	if (VerticesArray.Num() == 0 || TriangelsArray.Num() == 0)
 	{
+		FFunctionGraphTask::CreateAndDispatchWhenReady([this, id]() {
+			CastedShadeActor->MeshComponent->ClearMeshSection(id);
+			}, TStatId(), nullptr, ENamedThreads::GameThread);
+
 		//UE_LOG(LogTemp, Warning, TEXT("VerticesArray or TriangelsArray is empty!"));
 		return;
 	}
