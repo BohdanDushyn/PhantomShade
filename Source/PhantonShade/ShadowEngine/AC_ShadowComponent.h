@@ -56,6 +56,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Actor Settings", meta = (AllowedClasses = "Actor"))
     TSubclassOf<AActor> ShadowActorClass;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Param")
+    TArray<FVector> AllShadowsVerticesArray = {};
+
+    TArray<FVector> temporaryVerticesArray = {};
+
 protected:
     UWorld* WorldPtr = GetWorld();
 
@@ -112,10 +117,7 @@ public:
     //!!!Параметори через Game Stat
 	//!!!!розробити зміщення для квадратних об'єктів
 
-    bool AreAllTasksComplete() const
-    {
-        return ActiveTaskCount.load() == 0;
-    }
+    bool AreAllTasksComplete() const;
 
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
     TArray<AActor*> GetShadowOverlapingActors() { return CastedShadeActor->GetAllOverlapingActors(); }
@@ -154,6 +156,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     void StartShadowCalculate();
+
+    UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
+	AShade* GetShadowActor() { return CastedShadeActor; }
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     void StartShadowCalculateWithSetTimer(float NewTimer);

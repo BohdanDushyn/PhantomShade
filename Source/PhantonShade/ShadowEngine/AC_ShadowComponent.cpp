@@ -107,6 +107,11 @@ void UAC_ShadowComponent::SpawnShadowActor()
 	}
 }
 
+bool UAC_ShadowComponent::AreAllTasksComplete() const
+{
+	return ActiveTaskCount.load() == 0;
+}
+
 void UAC_ShadowComponent::SetParentActor()
 {
 	//if (!NewParent) return;
@@ -330,11 +335,15 @@ void UAC_ShadowComponent::CreateShadow()
 {
 	//uint64 StartCycles = FPlatformTime::Cycles64();
 
+	AllShadowsVerticesArray.Empty();
+
 	if (!AreAllTasksComplete())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Previous tasks are still running. Count: %d"), ActiveTaskCount.load());
 		return;
 	}
+	AllShadowsVerticesArray.Append(temporaryVerticesArray);
+	temporaryVerticesArray.Empty();
 
 	if (CastedLightActors.Num() == 0) return;
 
@@ -443,9 +452,11 @@ void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 		if (ShadowFloor.Num() != 0)
 		{
 			for (const FVector FloorPoints : ShadowFloor) {
+				temporaryVerticesArray.Add(FloorPoints);
 				FVector LocationVector = MeshRotator.RotateVector(FloorPoints - MeshLocationVector);
 				VerticesArray.Add(LocationVector.GetSafeNormal() * (LocationVector.Length() - OffsetFromPlane));
 			}
+			if (ShadowFloor.Num() >= 2) temporaryVerticesArray.Add(FMath::Lerp(ShadowFloor[0], ShadowFloor[1], 0.5f));
 			if (IsPreviousFloorEnebel)
 			{
 				for (int i = VerticesArray.Num() - 4; i <= VerticesArray.Num() - 3; i++)
