@@ -24,6 +24,9 @@ public:
 	float CharacterLevel = 1.0f;
 
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
+	bool bCanMove = true;
+
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
 	USpringArmComponent* SpringArm;
 
 	UPROPERTY(VisibleAnywhere)

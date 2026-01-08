@@ -47,7 +47,7 @@ void AMainCharacter::Move(const FInputActionValue& InputValue)
 {
 	FVector2D InputVector = InputValue.Get<FVector2D>();
 
-	if (IsValid(Controller))
+	if (IsValid(Controller) && bCanMove)
 	{
 
 		//const FRotator Rotation = Controller->GetControlRotation();

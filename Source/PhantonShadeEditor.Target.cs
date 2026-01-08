@@ -12,4 +12,8 @@ public class PhantonShadeEditorTarget : TargetRules
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
 		ExtraModuleNames.Add("PhantonShade");
 	}
+
+
 }
+
+

@@ -40,6 +40,7 @@ void UAC_ShadowComponent::StartShadowCalculate()
 void UAC_ShadowComponent::StartShadowCalculateWithSetTimer(float NewTimer)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("StartShadowCalculateWithSetTimer"));
+	IsStarted = true;
 	SetTimerInterval(NewTimer);
 	GetWorld()->GetTimerManager().SetTimer(
 		MyTimerHandle,
@@ -56,15 +57,75 @@ void UAC_ShadowComponent::SetShadeActor(AActor* NewShadeActor)
 	CastedShadeActor = Cast<AShade>(NewShadeActor);
 }
 
+void UAC_ShadowComponent::SpawnShadowActor()
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Shadow Component: No owner actor found"));
+		return;
+	}
+
+	FTransform OwnerTransform = OwnerActor->GetActorTransform();
+
+	if (ShadowActorClass)
+	{
+		UWorld* World = GetWorld();
+		if (World)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Owner = OwnerActor; 
+			SpawnParams.Instigator = OwnerActor->GetInstigator();
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+			AActor* SpawnedActor = World->SpawnActor<AActor>(
+				ShadowActorClass,
+				OwnerTransform.GetLocation(),
+				OwnerTransform.GetRotation().Rotator(),
+				SpawnParams
+			);
+
+			if (SpawnedActor)
+			{
+				SetShadeActor(SpawnedActor);
+
+				UE_LOG(LogTemp, Warning, TEXT("Shadow Component: Successfully spawned shadow actor"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("Shadow Component: Failed to spawn shadow actor"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Shadow Component: World is null"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Shadow Component: ShadowActorClass is not set! Please assign it in the editor."));
+	}
+}
+
+bool UAC_ShadowComponent::AreAllTasksComplete() const
+{
+	return ActiveTaskCount.load() == 0;
+}
+
 void UAC_ShadowComponent::SetParentActor()
 {
 	//if (!NewParent) return;
 
 	//ParentActor = NewParent;
 
-	if (GetOwner()) return;
+	//if (!IsValid(GetOwner())) return;
 
 	ParentActor = GetOwner();
+}
+
+void UAC_ShadowComponent::SetShadowCollision(bool bEnableCollision)
+{
+	CastedShadeActor->bCollisionEnabled = bEnableCollision;	
 }
 
 void UAC_ShadowComponent::SetTimerInterval(float NewTimerInterval)
@@ -106,81 +167,56 @@ void UAC_ShadowComponent::AddLightActor(AActor* Actor)
 {
 	if (Actor)
 	{
-		TSoftObjectPtr<AActor> SoftActor(Actor);
-		LightActors.AddUnique(SoftActor);
+		CastedLightActors.AddUnique(Cast<ALIghtActor>(Actor));
 	}
 }
 
 void UAC_ShadowComponent::SetLightActors(const TArray<AActor*>& Actors)
 {
-	LightActors.Empty();
+	CastedLightActors.Empty();
 
 	for (AActor* Actor : Actors)
 	{
 		if (Actor)
 		{
-			TSoftObjectPtr<AActor> SoftActor(Actor);
-			LightActors.Add(SoftActor);
+			CastedLightActors.AddUnique(Cast<ALIghtActor>(Actor));
 		}
 	}
 }
 
 void UAC_ShadowComponent::ClearLightActors()
 {
-	LightActors.Empty();
+	CastedLightActors.Empty();
 }
 
 void UAC_ShadowComponent::RemoveLightActor(AActor* Actor)
 {
 	if (Actor)
 	{
-		TSoftObjectPtr<AActor> SoftActor(Actor);
-		LightActors.Remove(SoftActor);
+		CastedLightActors.Remove(Cast<ALIghtActor>(Actor));
 	}
 
-	CastedShadeActor->RemoveMeschSection();
-}
-
-TArray<AActor*> UAC_ShadowComponent::GetLoadedLightActors()
-{
-	TArray<AActor*> LoadedActors;
-
-	for (const TSoftObjectPtr<AActor>& SoftActor : LightActors)
-	{
-		if (AActor* Actor = SoftActor.Get())
-		{
-			LoadedActors.Add(Actor);
-		}
-	}
-
-	return LoadedActors;
-}
-
-bool UAC_ShadowComponent::ContainsLightActor(AActor* Actor)
-{
-	if (!Actor)
-	{
-		return false;
-	}
-
-	TSoftObjectPtr<AActor> SoftActor(Actor);
-	return LightActors.Contains(SoftActor);
+	CastedShadeActor->MeshComponent->ClearAllMeshSections();
 }
 
 int32 UAC_ShadowComponent::GetLightSoursAmount()
 {
-	return LightActors.Num();
+	return CastedLightActors.Num();
 }
 
-void UAC_ShadowComponent::StartShadowCalculateWithParams(float TimerDelay, AActor* NewShadeActor, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces)
+void UAC_ShadowComponent::StartShadowCalculateWithParams(float TimerDelay, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces, float MinShadowMoveDelta)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("StartShadowCalculateWithParams"));
 	SetMapOfShadow(NewMapOfShadow);
 	SetParentActor();
 	SetAmountOfPieces(AmountOfFloorPieces);
-	SetShadeActor(NewShadeActor);
+	SpawnShadowActor();
 	SetLightActors(NewLightActors);
 	StartShadowCalculateWithSetTimer(TimerDelay);
+	if (CastedShadeActor)
+	{
+		CastedShadeActor->SetMoveDelta(MinShadowMoveDelta);
+	}
 }
 
 FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightStartLocation, FOffsetResultVector Offset, float RayMaxLength)
@@ -194,9 +230,18 @@ FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightSt
 	
 	TArray<FHitResult> HitResults;
 	
+	bool bHit = WorldPtr->LineTraceMultiByChannel(
+		HitResults,
+		LightStartLocation,
+		EndPoint,
+		ECollisionChannel::ECC_GameTraceChannel2,
+		FCollisionQueryParams{}
+	);
+
+
+	/*
 	auto TraceFunction = [this](const FVector& FuncStartPoint, const FVector& FuncEndPoint) {
 		TArray<FHitResult> FuncHitResults;
-		FCollisionQueryParams Params;
 		if (!GetWorld())
 		{
 			return FuncHitResults;
@@ -206,59 +251,8 @@ FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightSt
 			FuncStartPoint,
 			FuncEndPoint,
 			ECollisionChannel::ECC_GameTraceChannel2,
-			Params
+			FCollisionQueryParams{}
 		);
-
-		// Завжди малюємо повну лінію
-		/*
-		FColor LineColor = bHit ? FColor::Red : FColor::Green;
-		DrawDebugLine(
-			GetWorld(),
-			FuncStartPoint,
-			FuncEndPoint,
-			LineColor,
-			false,      // persistent lines
-			0.1f,       // lifetime (seconds)
-			0,          // depth priority
-			1.0f        // thickness
-		);*/
-		
-		/*
-		// Малюємо точки влучання для всіх перетинів
-		if (bHit)
-		{
-			for (const FHitResult& HitResult : FuncHitResults)
-			{
-				// Малюємо точку влучання
-				DrawDebugSphere(
-					GetWorld(),
-					HitResult.Location,
-					5.0f,       // radius
-					12,         // segments
-					FColor::Yellow,
-					false,      // persistent
-					0.1f,       // lifetime
-					0,          // depth priority
-					1.0f        // thickness
-				);
-				
-				
-				// Опціонально: малюємо нормаль поверхні
-				//DrawDebugDirectionalArrow(
-				//	GetWorld(),
-				//	HitResult.Location,
-				//	HitResult.Location + HitResult.Normal * 30.0f,
-				//	8.0f,       // arrow size
-				//	FColor::Blue,
-				//	false,      // persistent
-				//	0.1f,       // lifetime
-				//	0,          // depth priority
-				//	1.5f        // thickness
-				//);
-				
-			}
-		}
-		*/
 
 		return FuncHitResults;
 		};
@@ -270,6 +264,8 @@ FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightSt
 		}, TStatId(), nullptr, ENamedThreads::GameThread)->Wait();
 
 	HitResults = *SharedResults;
+	*/
+	
 
 	//UE_LOG(LogTemp, Warning, TEXT("HitResults %d %d"), Offset, HitResults.Num());
 	int8 LastHit = HitResults.Num() - 1;
@@ -289,8 +285,10 @@ FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightSt
 
 FOffsetResultVector UAC_ShadowComponent::MakeOffset(FVector OffsetValue, FVector LightPosition)
 {
-	double Dot = FVector::DotProduct((LightPosition - OwnerLocation).GetSafeNormal(), OwnerForwardVector.GetSafeNormal());
-	return FOffsetResultVector((OffsetValue * FVector(FMath::Abs(Dot), 1 - FMath::Abs(Dot), 0)).Length(), OffsetValue.Z);
+	float Dot = FVector::DotProduct((LightPosition - OwnerLocation).GetSafeNormal(), OwnerForwardVector.GetSafeNormal());
+	float angeleCorection = 1 - (FMath::Abs(0.5f - FMath::Abs(Dot)) * 2);
+	angeleCorection = 1 + (0.4142f * offsetCobvexityCoefficient * angeleCorection);
+	return FOffsetResultVector(((OffsetValue * FVector(FMath::Abs(Dot), 1 - FMath::Abs(Dot), 0)).Length() * angeleCorection), OffsetValue.Z);
 }
 
 
@@ -335,16 +333,22 @@ TArray<FVector> UAC_ShadowComponent::MakeShadowFloor(FVector OffsetValue, FVecto
 
 void UAC_ShadowComponent::CreateShadow()
 {
+	//uint64 StartCycles = FPlatformTime::Cycles64();
 
-	if (LightActors.Num() == 0) return;
+	AllShadowsVerticesArray.Empty();
 
-	TArray<TSoftObjectPtr<AActor>> LightActorsCopy = LightActors;
+	if (!AreAllTasksComplete())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Previous tasks are still running. Count: %d"), ActiveTaskCount.load());
+		return;
+	}
+	AllShadowsVerticesArray.Append(temporaryVerticesArray);
+	temporaryVerticesArray.Empty();
+
+	if (CastedLightActors.Num() == 0) return;
 
 	OwnerLocation = GetOwner()->GetActorLocation();
 	OwnerForwardVector = GetOwner()->GetActorForwardVector();
-
-	FGraphEventArray Tasks;
-	Tasks.Reserve(LightActors.Num());
 
 	if (!CastedShadeActor || !IsValid(CastedShadeActor))
 	{
@@ -352,48 +356,84 @@ void UAC_ShadowComponent::CreateShadow()
 		return;
 	}
 
+	if (bInShadow || CastedLightActors.Num() < CastedShadeActor->MeshComponent->GetNumSections())
+	{
+		CastedShadeActor->MeshComponent->ClearAllMeshSections();
+	}
+	bInShadow = true;
+	lightLevel = 0;
+
+	WorldPtr = GetWorld();
+
 	CastedShadeActor->UpdateShadowActorMeshTransform(GetOwner()->GetActorTransform());
 	MeshLocationVector = CastedShadeActor->GetActorLocation();
 	MeshRotator = CastedShadeActor->GetActorRotation() * -1;
 
 	TWeakObjectPtr<UAC_ShadowComponent> WeakThis(this);
 
-	
-	for (int32 i = 0; i < LightActorsCopy.Num(); i++)
-	{
+	TArray<ALIghtActor*> CastedLightActorsCopy = CastedLightActors;
 
-		FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
-			[WeakThis, LightActorsCopy, i]()
+	ActiveTaskCount.store(CastedLightActorsCopy.Num());
+	CastedShadeActor->bCollisionEnabled = false;
+	FFunctionGraphTask::CreateAndDispatchWhenReady(
+		[WeakThis, CastedLightActorsCopy]() {
+			//FGraphEventArray Tasks;
+			//Tasks.Reserve(CastedLightActorsCopy.Num());
+			for (int32 i = 0; i < CastedLightActorsCopy.Num(); i++)
 			{
-				if (UAC_ShadowComponent* ValidComponent = WeakThis.Get())
-				{
-					if (IsValid(ValidComponent))
+				
+				if (i == CastedLightActorsCopy.Num() - 1) WeakThis->SetShadowCollision(true);
+
+				ALIghtActor* LightActor = CastedLightActorsCopy[i];
+
+				FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
+					[WeakThis, LightActor, i]()
 					{
-						ValidComponent->CreateOneShadow(LightActorsCopy[i], i);
-					}
-				}
-			},
-			TStatId(),
-			nullptr,
-			ENamedThreads::AnyBackgroundHiPriTask
-		);
-		Tasks.Add(Task);
-	}
+						if (UAC_ShadowComponent* ValidComponent = WeakThis.Get())
+						{
+							if (IsValid(ValidComponent))
+							{
+								ValidComponent->CreateOneShadow(LightActor, i);
+							}
+						}
 
-	FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
+						if (UAC_ShadowComponent* ValidComponent = WeakThis.Get())
+						{
+							ValidComponent->ActiveTaskCount.fetch_sub(1);
+						}
+					},
+					TStatId(),
+					nullptr,
+					ENamedThreads::AnyHiPriThreadHiPriTask
+				);
 
-	//UE_LOG(LogTemp, Warning, TEXT("Amount %d"), CastedShadeActor->GetMeshNumSections());
-	//UE_LOG(LogTemp, Warning, TEXT("LightAmount %d"), LightActors.Num());
+				if (i == CastedLightActorsCopy.Num() - 2) Task->Wait();
+				//Tasks.Add(Task);
+			}
+			//FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
+		},
+		TStatId(),
+		nullptr,
+		ENamedThreads::AnyHiPriThreadHiPriTask
+	)->Wait();
+	//uint64 EndCycles = FPlatformTime::Cycles64();
+	//timer1Value += FPlatformTime::ToSeconds64(EndCycles - StartCycles);
 
-	/*
-	for (int32 i = 0; i < LightActorsCopy.Num(); i++)
-	{
-		CreateOneShadow(LightActorsCopy[i], i);
-	}*/
+	//timer1Counter += 1;
 	
+	//UE_LOG(LogTemp, Warning, TEXT("Section %d"), CastedShadeActor->MeshComponent->GetNumSections());
+	//UE_LOG(LogTemp, Warning, TEXT("Sadow %d"), CastedLightActors.Num());
+	/*
+	if (timer1Counter >= 100)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("High precision time: %f ms"), timer1Value * 1000.0 / timer1Counter);
+		UE_LOG(LogTemp, Warning, TEXT("Shadow casters: %d"), CastedLightActors.Num());
+		timer1Value = 0;
+		timer1Counter = 0;
+	}*/
 }
 
-void UAC_ShadowComponent::CreateOneShadow(TSoftObjectPtr<AActor> LightActor, int32 id)
+void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("OK!"));
 
@@ -402,26 +442,21 @@ void UAC_ShadowComponent::CreateOneShadow(TSoftObjectPtr<AActor> LightActor, int
 	TArray<int32> TriangelsArray;
 	for (const FVector Offset : MapOfShadow)
 	{
-		if (!LightActor.IsValid() || !IsValid(LightActor.Get()))
+		if (!LightActor)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("LightActor is not valid in CreateOneShadow"));
 			return;
 		}
 
-		AActor* Actor = LightActor.Get();
-		if (!Actor)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Failed to get LightActor"));
-			return;
-		}
-
-		TArray<FVector> ShadowFloor = MakeShadowFloor(Offset, ILightSoursInterface::Execute_GetLightSourPosition(Actor), ILightSoursInterface::Execute_GetLightSourAttenuationRadius(LightActor.Get()));
+		TArray<FVector> ShadowFloor = MakeShadowFloor(Offset, LightActor->GetComponentByClass<USphereComponent>()->GetComponentLocation(), LightActor->GetComponentByClass<USphereComponent>()->GetScaledSphereRadius());
 		if (ShadowFloor.Num() != 0)
 		{
 			for (const FVector FloorPoints : ShadowFloor) {
+				temporaryVerticesArray.Add(FloorPoints);
 				FVector LocationVector = MeshRotator.RotateVector(FloorPoints - MeshLocationVector);
 				VerticesArray.Add(LocationVector.GetSafeNormal() * (LocationVector.Length() - OffsetFromPlane));
 			}
+			if (ShadowFloor.Num() >= 2) temporaryVerticesArray.Add(FMath::Lerp(ShadowFloor[0], ShadowFloor[1], 0.5f));
 			if (IsPreviousFloorEnebel)
 			{
 				for (int i = VerticesArray.Num() - 4; i <= VerticesArray.Num() - 3; i++)
@@ -446,16 +481,17 @@ void UAC_ShadowComponent::CreateOneShadow(TSoftObjectPtr<AActor> LightActor, int
 	}
 	if (VerticesArray.Num() == 0 || TriangelsArray.Num() == 0)
 	{
+		FFunctionGraphTask::CreateAndDispatchWhenReady([this, id]() {
+			CastedShadeActor->MeshComponent->ClearMeshSection(id);
+			}, TStatId(), nullptr, ENamedThreads::GameThread);
+
 		//UE_LOG(LogTemp, Warning, TEXT("VerticesArray or TriangelsArray is empty!"));
 		return;
 	}
 	else {
 		//UE_LOG(LogTemp, Warning, TEXT("VerticesArray or TriangelsArray is NOT empty!"));
-		/*
-		FFunctionGraphTask::CreateAndDispatchWhenReady([this, id, VerticesArray, TriangelsArray]() {
-			II_ShadowMeshInterface::Execute_UpdateShadowActorMesh(ShadeActor, id, VerticesArray, TriangelsArray);
-			}, TStatId(), nullptr, ENamedThreads::GameThread);*/
-
+		bInShadow = false;
+		lightLevel += LightActor->LightLevel;
 		CastedShadeActor->UpdateShadowActorMeshes(id, VerticesArray, TriangelsArray);
 	}
 

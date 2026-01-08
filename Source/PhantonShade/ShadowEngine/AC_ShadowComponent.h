@@ -49,24 +49,47 @@ class PHANTONSHADE_API UAC_ShadowComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:	
-	// Sets default values for this component's properties
 	UAC_ShadowComponent();
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lighting")
-    TArray<TSoftObjectPtr<AActor>> LightActors;
+	TArray<ALIghtActor*> CastedLightActors;
     
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Actor Settings", meta = (AllowedClasses = "Actor"))
+    TSubclassOf<AActor> ShadowActorClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Param")
+    TArray<FVector> AllShadowsVerticesArray = {};
+
+    TArray<FVector> temporaryVerticesArray = {};
+
 protected:
+    UWorld* WorldPtr = GetWorld();
+
+    std::atomic<int32> ActiveTaskCount{ 0 };
+
+    UClass* LightActorBlueprintClass;
+
 	virtual void BeginPlay() override;
 
 	FVector OwnerLocation;
 
+	bool bInShadow = false;
+
+    float timer1Value = 0;
+
+    int32 timer1Counter = 0;
+
 	FVector OwnerForwardVector;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimerFunction")
     bool bTimerPaused = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ShadowFunction")
+    bool IsStarted = false;
 
     FTimerHandle MyTimerHandle;
 
     FVector MeshLocationVector;
+
+	float offsetCobvexityCoefficient = 1.0f;
 
     FRotator MeshRotator;
 
@@ -74,10 +97,10 @@ protected:
 
     AActor* ParentActor;
 
-    AShade* CastedShadeActor;
+    float lightLevel = 0;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Overlaping")
-    TArray<AActor*> OverlapingActors;
+    UPROPERTY(BlueprintReadOnly, Category = "ShadeActor")
+    AShade* CastedShadeActor;
 
     float OffsetFromPlane = 0;
 
@@ -88,11 +111,21 @@ protected:
     TArray<FVector> MapOfShadow;
 
 public:	 
+	void SpawnShadowActor();
+
+    //!!!Спробувати систему з актором що розраховує відстань від джерел світла до актора на основі відстані
+    //!!!Параметори через Game Stat
+	//!!!!розробити зміщення для квадратних об'єктів
+
+    bool AreAllTasksComplete() const;
+
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
-    TArray<AActor*> GetShadowOverlapingActors(){ return CastedShadeActor->GetAllOverlapingActors();}
+    TArray<AActor*> GetShadowOverlapingActors() { return CastedShadeActor->GetAllOverlapingActors(); }
 
     UFUNCTION(BlueprintCallable, Category = "Overlaping")
     void SetParentActor();
+
+	void SetShadowCollision(bool bEnableCollision);
 
     UFUNCTION(BlueprintCallable, Category = "LightingTimer")
     void SetTimerInterval(float NewTimerInterval);
@@ -114,21 +147,18 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     void RemoveLightActor(AActor* Actor);
-
-    UFUNCTION(BlueprintCallable, Category = "Lighting")
-    TArray<AActor*> GetLoadedLightActors();
-
-    UFUNCTION(BlueprintCallable, Category = "Lighting")
-    bool ContainsLightActor(AActor* Actor);
 		
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     int32 GetLightSoursAmount();
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
-    void StartShadowCalculateWithParams(float TimerDelay, AActor* NewShadeActor, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces);
+    void StartShadowCalculateWithParams(float TimerDelay, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces, float MinShadowMoveDelta);
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     void StartShadowCalculate();
+
+    UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
+	AShade* GetShadowActor() { return CastedShadeActor; }
 
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     void StartShadowCalculateWithSetTimer(float NewTimer);
@@ -157,7 +187,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     void CreateShadow();
 
-    void CreateOneShadow(TSoftObjectPtr<AActor> LightActor, int32 id);
+    void CreateOneShadow(ALIghtActor* LightActor, int32 id);
 
-    void SetLightActorsFromOverlapping();
+    //void SetLightActorsFromOverlapping();
 };
