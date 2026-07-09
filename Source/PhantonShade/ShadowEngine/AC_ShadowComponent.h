@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -20,9 +18,6 @@ USTRUCT(BlueprintType)
 struct FLineTraceResult
 {
     GENERATED_BODY()
-
-    //UPROPERTY(BlueprintReadOnly)
-    //FVector StartPointResult;
 
     UPROPERTY(BlueprintReadOnly)
     FVector EndPointResult;
@@ -51,6 +46,7 @@ class PHANTONSHADE_API UAC_ShadowComponent : public UActorComponent
 public:	
 	UAC_ShadowComponent();
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Actor Settings", meta = (AllowedClasses = "Actor"))
 	TArray<ALIghtActor*> CastedLightActors;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadow Actor Settings", meta = (AllowedClasses = "Actor"))
@@ -97,6 +93,7 @@ protected:
 
     AActor* ParentActor;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ShadowFunction")
     float lightLevel = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "ShadeActor")
@@ -113,18 +110,15 @@ protected:
 public:	 
 	void SpawnShadowActor();
 
-    //!!!Спробувати систему з актором що розраховує відстань від джерел світла до актора на основі відстані
-    //!!!Параметори через Game Stat
-	//!!!!розробити зміщення для квадратних об'єктів
-
     bool AreAllTasksComplete() const;
 
-    UFUNCTION(BlueprintCallable, Category = "Overlaping")
+    UFUNCTION(BlueprintCallable, Category = "Shadow Overlaping")
     TArray<AActor*> GetShadowOverlapingActors() { return CastedShadeActor->GetAllOverlapingActors(); }
 
-    UFUNCTION(BlueprintCallable, Category = "Overlaping")
+    UFUNCTION(BlueprintCallable, Category = "Shadow Param")
     void SetParentActor();
 
+    UFUNCTION(BlueprintCallable, Category = "Shadow Collision")
 	void SetShadowCollision(bool bEnableCollision);
 
     UFUNCTION(BlueprintCallable, Category = "LightingTimer")
@@ -184,10 +178,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
     TArray<FVector> MakeShadowFloor(FVector OffsetValue, FVector LightStartLocation, float RayMaxLenght);
 
+    UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
+	TArray<FVector> GetVerticesArrayByLightActor(int32 num);
+
+    UFUNCTION(BlueprintCallable, Category = "ShadowFunction")
+	TArray<int32> GetTriangelsArrayByLightActor(int32 num);
+
     UFUNCTION(BlueprintCallable, Category = "Lighting")
     void CreateShadow();
 
     void CreateOneShadow(ALIghtActor* LightActor, int32 id);
 
-    //void SetLightActorsFromOverlapping();
+    UFUNCTION(BlueprintCallable, Category = "ShadowOverlaping")
+    TArray<AActor*> CheckShadowSectionOverlapsWithShell();
 };

@@ -1,18 +1,11 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "AC_ShadowComponent.h"
 
-// Sets default values for this component's properties
 UAC_ShadowComponent::UAC_ShadowComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
 
 }
 
-
-// Called when the game starts
 void UAC_ShadowComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -114,12 +107,6 @@ bool UAC_ShadowComponent::AreAllTasksComplete() const
 
 void UAC_ShadowComponent::SetParentActor()
 {
-	//if (!NewParent) return;
-
-	//ParentActor = NewParent;
-
-	//if (!IsValid(GetOwner())) return;
-
 	ParentActor = GetOwner();
 }
 
@@ -165,9 +152,14 @@ void UAC_ShadowComponent::ResumeTimer()
 
 void UAC_ShadowComponent::AddLightActor(AActor* Actor)
 {
-	if (Actor)
+	if (!Actor) return;
+
+	if (ALIghtActor* tmp = Cast<ALIghtActor>(Actor))
 	{
-		CastedLightActors.AddUnique(Cast<ALIghtActor>(Actor));
+		if (tmp->IsActive)
+		{
+			CastedLightActors.AddUnique(tmp);
+		}
 	}
 }
 
@@ -206,7 +198,6 @@ int32 UAC_ShadowComponent::GetLightSoursAmount()
 
 void UAC_ShadowComponent::StartShadowCalculateWithParams(float TimerDelay, TArray<FVector> NewMapOfShadow, const TArray<AActor*>& NewLightActors, int AmountOfFloorPieces, float MinShadowMoveDelta)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("StartShadowCalculateWithParams"));
 	SetMapOfShadow(NewMapOfShadow);
 	SetParentActor();
 	SetAmountOfPieces(AmountOfFloorPieces);
@@ -215,6 +206,7 @@ void UAC_ShadowComponent::StartShadowCalculateWithParams(float TimerDelay, TArra
 	StartShadowCalculateWithSetTimer(TimerDelay);
 	if (CastedShadeActor)
 	{
+		CastedShadeActor->SetParent(ParentActor);
 		CastedShadeActor->SetMoveDelta(MinShadowMoveDelta);
 	}
 }
@@ -238,43 +230,10 @@ FLineTraceResult UAC_ShadowComponent::LineTraceWithOffset(const FVector& LightSt
 		FCollisionQueryParams{}
 	);
 
-
-	/*
-	auto TraceFunction = [this](const FVector& FuncStartPoint, const FVector& FuncEndPoint) {
-		TArray<FHitResult> FuncHitResults;
-		if (!GetWorld())
-		{
-			return FuncHitResults;
-		}
-		bool bHit = GetWorld()->LineTraceMultiByChannel(
-			FuncHitResults,
-			FuncStartPoint,
-			FuncEndPoint,
-			ECollisionChannel::ECC_GameTraceChannel2,
-			FCollisionQueryParams{}
-		);
-
-		return FuncHitResults;
-		};
-	
-	TSharedPtr<TArray<FHitResult>> SharedResults = MakeShared<TArray<FHitResult>>();
-
-	FFunctionGraphTask::CreateAndDispatchWhenReady([SharedResults, &TraceFunction, LightStartLocation, EndPoint]() {
-		*SharedResults = TraceFunction(LightStartLocation, EndPoint);
-		}, TStatId(), nullptr, ENamedThreads::GameThread)->Wait();
-
-	HitResults = *SharedResults;
-	*/
-	
-
-	//UE_LOG(LogTemp, Warning, TEXT("HitResults %d %d"), Offset, HitResults.Num());
 	int8 LastHit = HitResults.Num() - 1;
 	if (HitResults.Num() >= 2)
 	{
-		//UE_LOG(LogTemp, Warning, TEXT("HitResults %s"), *HitResults[0].GetComponent()->GetName());
 		if (HitResults[0].GetComponent() == GetOwner()->FindComponentByClass<UCapsuleComponent>() && HitResults[LastHit].GetActor() != GetOwner()) {
-			//UE_LOG(LogTemp, Warning, TEXT("HitResults %s"), *HitResults[LastHit].GetComponent()->GetName());
-			//Result.StartPoint = HitResults[0].ImpactPoint;
 			Result.EndPointResult = HitResults[LastHit].ImpactPoint;
 			Result.bIsTraced = true;
 		}
@@ -319,7 +278,6 @@ TArray<FVector> UAC_ShadowComponent::MakeShadowFloor(FVector OffsetValue, FVecto
 	{
 		for (int8 i = AmountOfPieces; i > index; i--)
 		{
-			//FLineTraceResult Result = LineTraceWithOffset(LightStartLocation, FOffsetResultVector(Offset.X - ((Offset.X / 0.5 / AmountOfPieces - 1) * i - AmountOfPieces - 1), Offset.Z), RayMaxLenght);
 			FLineTraceResult Result = LineTraceWithOffset(LightStartLocation, FOffsetResultVector(Offset.X - ((Offset.X / 0.5 / AmountOfPieces) * i), Offset.Z), RayMaxLenght);
 			if (Result.bIsTraced) {
 				ShadowPointMap.Add(Result.EndPointResult);
@@ -331,10 +289,26 @@ TArray<FVector> UAC_ShadowComponent::MakeShadowFloor(FVector OffsetValue, FVecto
 	return TArray<FVector>{};
 }
 
+TArray<FVector> UAC_ShadowComponent::GetVerticesArrayByLightActor(int32 num)
+{
+	if (CastedShadeActor->SectionsVerticesArray.IsValidIndex(num))
+	{
+		return CastedShadeActor->SectionsVerticesArray[num];
+	}
+	return TArray<FVector>();
+}
+
+TArray<int32> UAC_ShadowComponent::GetTriangelsArrayByLightActor(int32 num)
+{
+	if (CastedShadeActor->SectionsTriangelsArray.IsValidIndex(num))
+	{
+		return CastedShadeActor->SectionsTriangelsArray[num];
+	}
+	return TArray<int32>();
+}
+
 void UAC_ShadowComponent::CreateShadow()
 {
-	//uint64 StartCycles = FPlatformTime::Cycles64();
-
 	AllShadowsVerticesArray.Empty();
 
 	if (!AreAllTasksComplete())
@@ -359,6 +333,8 @@ void UAC_ShadowComponent::CreateShadow()
 	if (bInShadow || CastedLightActors.Num() < CastedShadeActor->MeshComponent->GetNumSections())
 	{
 		CastedShadeActor->MeshComponent->ClearAllMeshSections();
+		CastedShadeActor->SectionsVerticesArray.Empty();
+		CastedShadeActor->SectionsTriangelsArray.Empty();
 	}
 	bInShadow = true;
 	lightLevel = 0;
@@ -377,8 +353,6 @@ void UAC_ShadowComponent::CreateShadow()
 	CastedShadeActor->bCollisionEnabled = false;
 	FFunctionGraphTask::CreateAndDispatchWhenReady(
 		[WeakThis, CastedLightActorsCopy]() {
-			//FGraphEventArray Tasks;
-			//Tasks.Reserve(CastedLightActorsCopy.Num());
 			for (int32 i = 0; i < CastedLightActorsCopy.Num(); i++)
 			{
 				
@@ -408,35 +382,16 @@ void UAC_ShadowComponent::CreateShadow()
 				);
 
 				if (i == CastedLightActorsCopy.Num() - 2) Task->Wait();
-				//Tasks.Add(Task);
 			}
-			//FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
 		},
 		TStatId(),
 		nullptr,
 		ENamedThreads::AnyHiPriThreadHiPriTask
 	)->Wait();
-	//uint64 EndCycles = FPlatformTime::Cycles64();
-	//timer1Value += FPlatformTime::ToSeconds64(EndCycles - StartCycles);
-
-	//timer1Counter += 1;
-	
-	//UE_LOG(LogTemp, Warning, TEXT("Section %d"), CastedShadeActor->MeshComponent->GetNumSections());
-	//UE_LOG(LogTemp, Warning, TEXT("Sadow %d"), CastedLightActors.Num());
-	/*
-	if (timer1Counter >= 100)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("High precision time: %f ms"), timer1Value * 1000.0 / timer1Counter);
-		UE_LOG(LogTemp, Warning, TEXT("Shadow casters: %d"), CastedLightActors.Num());
-		timer1Value = 0;
-		timer1Counter = 0;
-	}*/
 }
 
 void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("OK!"));
-
 	bool IsPreviousFloorEnebel = false;
 	TArray<FVector> VerticesArray;
 	TArray<int32> TriangelsArray;
@@ -463,7 +418,6 @@ void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 				{
 					for (int j = i; j <= i+2; j++)
 					{
-						//UE_LOG(LogTemp, Warning, TEXT("j: %d"), j);
 						TriangelsArray.Add(j);
 					}
 				}
@@ -485,37 +439,16 @@ void UAC_ShadowComponent::CreateOneShadow(ALIghtActor* LightActor, int32 id)
 			CastedShadeActor->MeshComponent->ClearMeshSection(id);
 			}, TStatId(), nullptr, ENamedThreads::GameThread);
 
-		//UE_LOG(LogTemp, Warning, TEXT("VerticesArray or TriangelsArray is empty!"));
 		return;
 	}
 	else {
-		//UE_LOG(LogTemp, Warning, TEXT("VerticesArray or TriangelsArray is NOT empty!"));
 		bInShadow = false;
 		lightLevel += LightActor->LightLevel;
 		CastedShadeActor->UpdateShadowActorMeshes(id, VerticesArray, TriangelsArray);
 	}
-
-	/*
-	if (AActor* Actor = SoftActor.Get())
-	{
-		// Перевіряємо чи актор реалізує інтерфейс
-		if (Actor->Implements<ULightSoursInterface>())
-		{
-			// Викликаємо інтерфейс через Execute
-			FVector Position = ILightSoursInterface::Execute_GetLightSourPosition(Actor);
-			//UE_LOG(LogTemp, Warning, TEXT("Actor [%d] %s Position: %s"), id, *Actor->GetName(), *Position.ToString());
-		}
-		else
-		{
-			// Fallback - стандартна позиція актора
-			FVector Position = Actor->GetActorLocation();
-			//UE_LOG(LogTemp, Warning, TEXT("Actor [%d] %s Position (fallback): %s"), id, *Actor->GetName(), *Position.ToString());
-		}
-	}
-	else
-	{
-		//UE_LOG(LogTemp, Error, TEXT("Actor [%d]: NULL or not loaded"), id);
-	}
-	*/
 }
 
+TArray<AActor*> UAC_ShadowComponent::CheckShadowSectionOverlapsWithShell()
+{
+	return CastedShadeActor->CheckSectionOverlapsWithShell();
+}
